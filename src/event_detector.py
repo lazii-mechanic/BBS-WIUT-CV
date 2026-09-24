@@ -15,7 +15,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 from collections import defaultdict
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Set, Optional
 
 try:
     from src.scene_config import CROSSWALKS, STOP_LINES, ROADWAY, PEDESTRIAN_SAFE_ZONES

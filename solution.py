@@ -25,14 +25,11 @@ _src_dir = str(Path(__file__).parent / "src")
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-try:
-    from src.tracker import RoadTracker
-    from src.event_detector import EventDetector
-    from src.postprocessor import merge_raw_frames
-except ImportError:
-    from tracker import RoadTracker
-    from event_detector import EventDetector
-    from postprocessor import merge_raw_frames
+
+from src.tracker import RoadTracker
+from src.event_detector import EventDetector
+from src.postprocessor import merge_raw_frames
+
 
 # Official class ids (14). See the task description for definitions and
 # start/end conventions. Remove entries you never predict; never add.
