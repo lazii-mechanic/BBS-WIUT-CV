@@ -4,8 +4,10 @@ import sys
 from pathlib import Path
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent))
-from scene_config import CROSSWALKS, STOP_LINES, ROADWAY, PEDESTRIAN_SAFE_ZONES, TRAFFIC_LIGHT_ROI
+try:
+    from src.scene_config import CROSSWALKS, STOP_LINES, ROADWAY, PEDESTRIAN_SAFE_ZONES, TRAFFIC_LIGHT_ROI
+except ImportError:
+    from scene_config import CROSSWALKS, STOP_LINES, ROADWAY, PEDESTRIAN_SAFE_ZONES, TRAFFIC_LIGHT_ROI
 
 def main():
     img_path = Path("d:/CVHACK/wiut_cv_scripts/wiut_cv_scripts/videos/sample_frame.jpg")

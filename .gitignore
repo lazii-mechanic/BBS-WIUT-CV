@@ -17,3 +17,6 @@ videos/
 .DS_Store
 .idea/
 .vscode/
+
+# Duplicate weights in root (weights/yolo11n.pt is kept)
+/yolo11n.pt

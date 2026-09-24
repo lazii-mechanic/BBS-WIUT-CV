@@ -17,8 +17,12 @@ import numpy as np
 from collections import defaultdict
 from typing import Dict, List, Tuple, Set
 
-from scene_config import CROSSWALKS, STOP_LINES, ROADWAY, PEDESTRIAN_SAFE_ZONES
-from tracker import TrackState
+try:
+    from src.scene_config import CROSSWALKS, STOP_LINES, ROADWAY, PEDESTRIAN_SAFE_ZONES
+    from src.tracker import TrackState
+except ImportError:
+    from scene_config import CROSSWALKS, STOP_LINES, ROADWAY, PEDESTRIAN_SAFE_ZONES
+    from tracker import TrackState
 
 
 def pt_in_poly(pt: Tuple[float, float], poly: np.ndarray) -> bool:
