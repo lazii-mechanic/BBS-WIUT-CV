@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.env
+
+# Large video files (20GB sample videos must not be pushed to GitHub)
+videos/
+*.mp4
+*.MP4
+
+# OS and IDE files
+.DS_Store
+.idea/
+.vscode/
