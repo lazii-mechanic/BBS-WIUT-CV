@@ -29,6 +29,8 @@ if _src_dir not in sys.path:
 from src.tracker import RoadTracker
 from src.event_detector import EventDetector
 from src.postprocessor import merge_raw_frames
+from src.risk_estimator import TTCRiskEstimator
+
 
 
 # Official class ids (14). See the task description for definitions and
@@ -137,16 +139,11 @@ class RiskEstimator:
         self.meta = meta
         self.last_score = 0.0
         try:
-            from src.risk_estimator import TTCRiskEstimator
+            if self._impl is None:
+                self._impl = TTCRiskEstimator(proc_stride=5, imgsz=512, conf=0.25)
+            self._impl.reset(meta)
         except Exception:
-            try:
-                from risk_estimator import TTCRiskEstimator
-            except Exception:
-                self._impl = None
-                return
-        if self._impl is None:
-            self._impl = TTCRiskEstimator(proc_stride=5, imgsz=512, conf=0.25)
-        self._impl.reset(meta)
+            self._impl = None
 
     def step(self, frame: np.ndarray, t_sec: float) -> float:
         if self._impl is None:

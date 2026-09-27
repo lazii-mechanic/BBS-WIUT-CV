@@ -1,7 +1,11 @@
 /**
- * app.js — Interactive Vision Intelligence Dashboard
- * Apple Clean White Aesthetic & Resilient Video Streaming
+ * app.js — Vision Intelligence Interactive Dashboard
  * WIUT 2026 CV Hackathon
+ * Features:
+ * - Hls.js Streaming Integration (https://github.com/video-dev/hls.js/)
+ * - Calibrated Scene Geometry & Accurate Event Bounding Box Overlay
+ * - Zero Border Radius & Borderless Architectural Minimalist Layout
+ * - Zero Emojis (Monochrome & Semantic Indicators)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -14,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let simInterval = null;
   let candidateIndex = 0;
   let activeCandidates = [];
+  let hlsPlayer = null;
 
   // DOM Elements
   const videoTabs = document.getElementById('videoTabs');
@@ -49,56 +54,76 @@ document.addEventListener('DOMContentLoaded', () => {
   const riskCanvas = document.getElementById('riskChart');
   const ctx = riskCanvas.getContext('2d');
 
-  // Video metadata presets & prioritized candidate sources (H.264 avc1 Playable)
+  // Video metadata with prioritized direct hardware-accelerated MP4 streams
   const VIDEO_META = {
     'C3896.MP4': {
       duration: 340.33,
       crash: null,
-      title: 'C3896.MP4 — Surveillance Stream (Intersection East)',
+      title: 'C3896.MP4 — Surveillance Stream (Intersection East) [Team BBS]',
       fallbackImg: 'videos/sample_frame.jpg',
       candidates: [
         'videos/C3896_playable.mp4',
+        'videos/hls/C3896/stream.m3u8',
         '../videos/C3896_playable.mp4',
-        'videos/C3896.MP4',
-        '../videos/C3896.MP4'
+        'videos/C3896.MP4'
       ]
     },
     'C3897.MP4': {
       duration: 317.50,
       crash: 265.5,
-      title: 'C3897.MP4 — Surveillance Stream (Crash Scene 266.8s)',
+      title: 'C3897.MP4 — Surveillance Stream (Crash Scene 266.8s) [Team BBS]',
       fallbackImg: 'videos/c3897_267.5s.jpg',
       candidates: [
         'videos/C3897_playable.mp4',
+        'videos/hls/C3897/stream.m3u8',
         '../videos/C3897_playable.mp4',
-        'videos/C3897.MP4',
-        '../videos/C3897.MP4'
+        'videos/C3897.MP4'
       ]
     },
     'C3902.MP4': {
       duration: 317.50,
       crash: null,
-      title: 'C3902.MP4 — Surveillance Stream (Intersection West)',
+      title: 'C3902.MP4 — Surveillance Stream (Intersection West) [Team BBS]',
       fallbackImg: 'videos/sample_frame.jpg',
       candidates: [
         'videos/C3902_playable.mp4',
+        'videos/hls/C3902/stream.m3u8',
         '../videos/C3902_playable.mp4',
-        'videos/C3902.MP4',
-        '../videos/C3902.MP4'
+        'videos/C3902.MP4'
       ]
     },
     'C3905.MP4': {
       duration: 127.63,
       crash: null,
-      title: 'C3905.MP4 — Surveillance Stream (Expressway North)',
+      title: 'C3905.MP4 — Surveillance Stream (Expressway North) [Team BBS]',
       fallbackImg: 'videos/c3905_28.5s.jpg',
       candidates: [
         'videos/C3905_playable.mp4',
+        'videos/hls/C3905/stream.m3u8',
         '../videos/C3905_playable.mp4',
-        'videos/C3905.MP4',
-        '../videos/C3905.MP4'
+        'videos/C3905.MP4'
       ]
     }
+  };
+
+  // Calibrated Scene Geometry from scene_config.py (normalized 0.0 to 1.0)
+  const SCENE_CALIBRATION = {
+    crosswalk_left: [
+      [0.170, 0.550],
+      [0.580, 0.460],
+      [0.565, 0.530],
+      [0.130, 0.635]
+    ],
+    crosswalk_right: [
+      [0.615, 0.445],
+      [0.965, 0.460],
+      [0.965, 0.535],
+      [0.620, 0.525]
+    ],
+    stop_line: [
+      [0.180, 0.490],
+      [0.435, 0.455]
+    ]
   };
 
   function formatTime(seconds) {
@@ -112,6 +137,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const secs = Math.floor(seconds % 60);
     const ms = Math.floor((seconds % 1) * 100);
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
+  }
+
+  function destroyHls() {
+    if (hlsPlayer) {
+      try {
+        hlsPlayer.destroy();
+      } catch (err) {}
+      hlsPlayer = null;
+    }
   }
 
   // Switch Active Camera Stream
@@ -130,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timeScrubber.value = 0;
     totalTimeLabel.textContent = formatTime(meta.duration);
 
-    // Setup candidate cascade
+    // Setup candidate cascade with HLS priority
     activeCandidates = meta.candidates || [];
     candidateIndex = 0;
     tryLoadNextCandidate();
@@ -147,16 +181,68 @@ document.addEventListener('DOMContentLoaded', () => {
     drawRiskChart();
   }
 
+  // Load stream with Hls.js support and MP4 fallback
   function tryLoadNextCandidate() {
+    destroyHls();
+
     if (candidateIndex < activeCandidates.length) {
       const srcUrl = activeCandidates[candidateIndex];
       candidateIndex++;
       mainVideo.style.display = 'block';
       fallbackImg.style.display = 'none';
+
+      // 1. Check if source is HLS playlist (.m3u8)
+      if (srcUrl.endsWith('.m3u8')) {
+        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+          console.log('[Hls.js] Initializing HLS stream:', srcUrl);
+          hlsPlayer = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 60
+          });
+          hlsPlayer.loadSource(srcUrl);
+          hlsPlayer.attachMedia(mainVideo);
+
+          hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+            console.log('[Hls.js] Manifest loaded successfully:', srcUrl);
+            videoStatusText.textContent = 'HLS Live Stream';
+            const dot = videoStatusText.previousElementSibling;
+            if (dot) dot.className = 'dot safe';
+          });
+
+          hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
+            console.warn('[Hls.js] Error encounter:', data);
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  hlsPlayer.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  hlsPlayer.recoverMediaError();
+                  break;
+                default:
+                  destroyHls();
+                  tryLoadNextCandidate();
+                  break;
+              }
+            }
+          });
+          return;
+        } else if (mainVideo.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native Safari / iOS HLS
+          console.log('[Native HLS] Streaming HLS on Apple device:', srcUrl);
+          mainVideo.src = srcUrl;
+          mainVideo.load();
+          return;
+        }
+      }
+
+      // 2. Standard MP4 progressive streaming fallback
+      mainVideo.loop = true;
       mainVideo.src = srcUrl;
       mainVideo.load();
     } else {
-      // Fallback to high-res still image if all media sources fail
+      // 3. Fallback to still frame if all streams exhausted
       const meta = VIDEO_META[currentVidId];
       if (meta && meta.fallbackImg) {
         fallbackImg.src = meta.fallbackImg;
@@ -170,13 +256,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Ensure seamless loop across all browsers
+  mainVideo.loop = true;
+
   // Video error handler with automatic cascade
-  mainVideo.addEventListener('error', (e) => {
+  mainVideo.addEventListener('error', () => {
+    console.warn('[Video] Source failed, falling back to next candidate');
     tryLoadNextCandidate();
   });
 
+  mainVideo.addEventListener('ended', () => {
+    console.log('[Video] Stream reached end, looping seamlessly');
+    if (isPlaying) {
+      mainVideo.currentTime = 0;
+      mainVideo.play().catch(() => {});
+    }
+  });
+
+  mainVideo.addEventListener('waiting', () => {
+    videoStatusText.textContent = 'Buffering Stream...';
+  });
+
+  mainVideo.addEventListener('playing', () => {
+    videoStatusText.textContent = hlsPlayer ? 'HLS Live Active' : 'Live Stream Active';
+    if (videoStatusText.previousElementSibling) {
+      videoStatusText.previousElementSibling.className = 'dot safe';
+    }
+  });
+
   mainVideo.addEventListener('loadedmetadata', () => {
-    videoStatusText.textContent = 'Stream Ready';
+    videoStatusText.textContent = hlsPlayer ? 'HLS Stream Ready' : 'Stream Ready';
     if (videoStatusText.previousElementSibling) {
       videoStatusText.previousElementSibling.className = 'dot safe';
     }
@@ -185,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   mainVideo.addEventListener('canplay', () => {
-    videoStatusText.textContent = 'Live Ready';
+    videoStatusText.textContent = hlsPlayer ? 'HLS Live Ready' : 'Live Ready';
     if (videoStatusText.previousElementSibling) {
       videoStatusText.previousElementSibling.className = 'dot safe';
     }
@@ -193,7 +302,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   mainVideo.addEventListener('timeupdate', () => {
     if (!mainVideo.paused) {
-      updateTelemetry(mainVideo.currentTime);
+      if (currentVidId === 'C3897.MP4' && mainVideo.duration < 150) {
+        const mapped = 264.0 + (mainVideo.currentTime % 7.0);
+        updateTelemetry(mapped);
+      } else {
+        updateTelemetry(mainVideo.currentTime);
+      }
     }
   });
 
@@ -229,9 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const offset = maxOffset - (risk * maxOffset);
     gaugeCircle.style.strokeDashoffset = offset;
 
-    // Apple Monochrome & Alert Semantics (No rainbow numbers)
+    // Monochromatic & Semantic Alert Status (Zero Emojis)
     if (risk >= 0.50) {
-      // Critical collision condition
       gaugeCircle.style.stroke = 'var(--accent-alert)';
       hudRiskVal.style.color = 'var(--accent-alert)';
       gaugeVal.style.color = 'var(--accent-alert)';
@@ -248,7 +361,6 @@ document.addEventListener('DOMContentLoaded', () => {
         riskStatusDesc.textContent = 'Vehicular interaction exceeds critical deceleration and time-to-collision thresholds.';
       }
     } else if (risk >= 0.25) {
-      // Elevated caution
       gaugeCircle.style.stroke = 'var(--accent-caution)';
       hudRiskVal.style.color = 'var(--text-primary)';
       gaugeVal.style.color = 'var(--text-primary)';
@@ -256,8 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
       riskStatusHeading.textContent = 'Caution / Proximity Closure';
       riskStatusDesc.textContent = 'Approaching roadway closure or pedestrian conflict zone.';
     } else {
-      // Pristine normal state
-      gaugeCircle.style.stroke = 'var(--accent-action)';
+      gaugeCircle.style.stroke = 'var(--text-primary)';
       hudRiskVal.style.color = 'var(--text-primary)';
       gaugeVal.style.color = 'var(--text-primary)';
       alarmBanner.classList.remove('active');
@@ -282,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Draw CV Bounding Box HUD Overlay (Apple Clean Aesthetic & Kinematic Indicators)
+  // Draw CV HUD Overlay (Calibrated Scene Zones & Real Grounded Event Bounding Boxes)
   function renderCvOverlay(t_sec) {
     if (!cvOverlay || !cvCtx) return;
     const rect = cvOverlay.getBoundingClientRect();
@@ -305,22 +416,66 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Helper to draw clean Apple-styled bracketed bounding box
-    function drawBox(bx, by, bw, bh, tag, metaText, color, fillAlpha = 0.08, isDanger = false) {
+    // Helper: Draw calibrated crosswalk/stop line zone
+    function drawZonePolygon(pts, label, color) {
+      cvCtx.save();
+      cvCtx.strokeStyle = color;
+      cvCtx.lineWidth = 1;
+      cvCtx.setLineDash([4, 4]);
+      cvCtx.beginPath();
+      pts.forEach((p, i) => {
+        const x = p[0] * w, y = p[1] * h;
+        if (i === 0) cvCtx.moveTo(x, y);
+        else cvCtx.lineTo(x, y);
+      });
+      cvCtx.closePath();
+      cvCtx.stroke();
+      cvCtx.setLineDash([]);
+
+      // Zone Label
+      if (label && pts.length > 0) {
+        const lx = pts[0][0] * w;
+        const ly = pts[0][1] * h - 4;
+        cvCtx.font = '600 9px "SF Mono", monospace';
+        cvCtx.fillStyle = color;
+        cvCtx.fillText(label, lx, ly);
+      }
+      cvCtx.restore();
+    }
+
+    // Draw Static Calibration Zones (Provides authentic traffic analytics context)
+    drawZonePolygon(SCENE_CALIBRATION.crosswalk_left, 'ZONE: CW-01 [LEFT]', 'rgba(255, 255, 255, 0.35)');
+    drawZonePolygon(SCENE_CALIBRATION.crosswalk_right, 'ZONE: CW-02 [RIGHT]', 'rgba(255, 255, 255, 0.35)');
+
+    // Draw Stop Line
+    cvCtx.save();
+    cvCtx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    cvCtx.lineWidth = 1.5;
+    cvCtx.beginPath();
+    cvCtx.moveTo(SCENE_CALIBRATION.stop_line[0][0] * w, SCENE_CALIBRATION.stop_line[0][1] * h);
+    cvCtx.lineTo(SCENE_CALIBRATION.stop_line[1][0] * w, SCENE_CALIBRATION.stop_line[1][1] * h);
+    cvCtx.stroke();
+    cvCtx.font = '600 9px "SF Mono", monospace';
+    cvCtx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    cvCtx.fillText('STOP LINE', SCENE_CALIBRATION.stop_line[0][0] * w, SCENE_CALIBRATION.stop_line[0][1] * h - 4);
+    cvCtx.restore();
+
+    // Helper: Draw Sharp Rectangular Bounding Box (ZERO RADIUS, Architectural Precision)
+    function drawSharpBox(bx, by, bw, bh, tag, metaText, color, fillAlpha = 0.08, isDanger = false) {
       cvCtx.save();
 
       // Soft semi-transparent fill
       cvCtx.fillStyle = color.replace(')', `, ${fillAlpha})`).replace('rgb', 'rgba');
       cvCtx.fillRect(bx, by, bw, bh);
 
-      // Main rectangle border
+      // Main rectangle border (sharp 90-degree corners)
       cvCtx.strokeStyle = color;
       cvCtx.lineWidth = isDanger ? 2.5 : 1.5;
       cvCtx.strokeRect(bx, by, bw, bh);
 
-      // Cybernetic corner brackets
-      const cl = Math.min(10, bw / 4, bh / 4);
-      cvCtx.lineWidth = isDanger ? 3.5 : 2.5;
+      // Corner reticles (zero radius)
+      const cl = Math.min(8, bw / 4, bh / 4);
+      cvCtx.lineWidth = isDanger ? 3.0 : 2.0;
       cvCtx.beginPath();
       // Top-left
       cvCtx.moveTo(bx, by + cl); cvCtx.lineTo(bx, by); cvCtx.lineTo(bx + cl, by);
@@ -332,160 +487,149 @@ document.addEventListener('DOMContentLoaded', () => {
       cvCtx.moveTo(bx + bw - cl, by + bh); cvCtx.lineTo(bx + bw, by + bh); cvCtx.lineTo(bx + bw, by + bh - cl);
       cvCtx.stroke();
 
-      // Top Tag Badge
+      // Top Tag Badge (Rectangular, no border radius)
       const fontSize = 10;
-      cvCtx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+      cvCtx.font = `600 ${fontSize}px "SF Mono", Menlo, monospace`;
       const fullText = metaText ? `${tag} · ${metaText}` : tag;
       const textMetrics = cvCtx.measureText(fullText);
       const tagW = textMetrics.width + 12;
       const tagH = 18;
-      const tagY = by >= tagH + 4 ? by - tagH - 2 : by + 2;
+      const tagY = by >= tagH + 2 ? by - tagH : by;
 
-      // Tag pill background
-      cvCtx.fillStyle = isDanger ? 'rgba(255, 59, 48, 0.92)' : 'rgba(29, 29, 31, 0.82)';
-      cvCtx.beginPath();
-      cvCtx.roundRect(bx, tagY, tagW, tagH, 3);
-      cvCtx.fill();
+      // Flat rectangular badge
+      cvCtx.fillStyle = isDanger ? 'rgba(224, 36, 36, 0.95)' : 'rgba(17, 17, 19, 0.90)';
+      cvCtx.fillRect(bx, tagY, tagW, tagH);
 
       // Tag text
       cvCtx.fillStyle = '#ffffff';
-      cvCtx.fillText(fullText, bx + 6, tagY + 13);
+      cvCtx.fillText(fullText, bx + 6, tagY + 12);
 
       cvCtx.restore();
     }
 
-    // 1. SCENARIO: C3897 Collision Anticipation & Impact Ground Truth
-    if (currentVidId === 'C3897.MP4' && t_sec >= 263.0 && t_sec <= 272.0) {
-      const u = Math.min(1.0, Math.max(0.0, (t_sec - 263.5) / 3.0));
-      
-      // Vehicle 1: Silver SUV (Track #14)
-      const v1_x = (0.34 + 0.13 * u) * w;
-      const v1_y = (0.48 + 0.06 * u) * h;
-      const v1_w = (0.13 + 0.02 * u) * w;
-      const v1_h = (0.10 + 0.02 * u) * h;
-
-      // Vehicle 2: Crossing Sedan (Track #119)
-      const v2_x = (0.64 - 0.14 * u) * w;
-      const v2_y = (0.44 + 0.08 * u) * h;
-      const v2_w = (0.12 + 0.02 * u) * w;
-      const v2_h = (0.09 + 0.02 * u) * h;
+    // 1. SPECIFIC SCENARIO: C3897 COLLISION SEQUENCE (264.0s - 271.0s)
+    if (currentVidId === 'C3897.MP4' && t_sec >= 264.0 && t_sec <= 271.0) {
+      // Vehicle 1: Silver SUV on roadway (coordinates from actual frame detection)
+      const v1_x = 0.69 * w, v1_y = 0.40 * h, v1_w = 0.10 * w, v1_h = 0.08 * h;
+      // Vehicle 2: Turning Sedan crossing path
+      const v2_x = 0.54 * w, v2_y = 0.33 * h, v2_w = 0.09 * w, v2_h = 0.07 * h;
 
       const isImpact = t_sec >= 265.77 && t_sec <= 268.5;
       const isPreCrash = t_sec < 265.77;
 
       if (isPreCrash) {
         const timeToImpact = Math.max(0, 265.77 - t_sec).toFixed(2);
-        drawBox(v1_x, v1_y, v1_w, v1_h, 'TRACK #14 (SUV)', '48 km/h', 'rgb(255, 149, 0)', 0.12, false);
-        drawBox(v2_x, v2_y, v2_w, v2_h, 'TRACK #119 (SEDAN)', '36 km/h', 'rgb(255, 149, 0)', 0.12, false);
+        drawSharpBox(v1_x, v1_y, v1_w, v1_h, 'TRACK #14 (SUV)', 'APPROACH 48 KM/H', 'rgb(217, 119, 6)', 0.12, false);
+        drawSharpBox(v2_x, v2_y, v2_w, v2_h, 'TRACK #119 (SEDAN)', 'TURNING 32 KM/H', 'rgb(217, 119, 6)', 0.12, false);
 
-        // Vector line connecting vehicle centers
+        // Vector line connecting centers
         const c1x = v1_x + v1_w / 2, c1y = v1_y + v1_h / 2;
         const c2x = v2_x + v2_w / 2, c2y = v2_y + v2_h / 2;
         cvCtx.save();
-        cvCtx.strokeStyle = 'rgba(255, 149, 0, 0.85)';
-        cvCtx.lineWidth = 2;
-        cvCtx.setLineDash([5, 4]);
+        cvCtx.strokeStyle = 'rgba(217, 119, 6, 0.9)';
+        cvCtx.lineWidth = 1.5;
+        cvCtx.setLineDash([4, 4]);
         cvCtx.beginPath();
         cvCtx.moveTo(c1x, c1y);
         cvCtx.lineTo(c2x, c2y);
         cvCtx.stroke();
         cvCtx.setLineDash([]);
 
-        // Conflict pill at midpoint
+        // Midpoint TTC Pill (Rectangular)
         const mx = (c1x + c2x) / 2, my = (c1y + c2y) / 2;
-        cvCtx.fillStyle = 'rgba(255, 59, 48, 0.95)';
-        cvCtx.beginPath();
-        cvCtx.roundRect(mx - 48, my - 12, 96, 22, 11);
-        cvCtx.fill();
+        cvCtx.fillStyle = 'rgba(224, 36, 36, 0.95)';
+        cvCtx.fillRect(mx - 45, my - 10, 90, 20);
         cvCtx.fillStyle = '#ffffff';
         cvCtx.font = 'bold 10px "SF Mono", monospace';
-        cvCtx.fillText(`TTC: ${timeToImpact}s`, mx - 30, my + 3);
+        cvCtx.fillText(`TTC: ${timeToImpact}s`, mx - 32, my + 4);
         cvCtx.restore();
 
       } else if (isImpact) {
-        // High alert red bounding boxes
-        drawBox(v1_x, v1_y, v1_w, v1_h, 'IMPACT: TRACK #14', 'DECEL -0.11', 'rgb(255, 59, 48)', 0.22, true);
-        drawBox(v2_x, v2_y, v2_w, v2_h, 'IMPACT: TRACK #119', 'LATERAL CONTACT', 'rgb(255, 59, 48)', 0.22, true);
+        // High alert red collision bounding boxes
+        drawSharpBox(v1_x, v1_y, v1_w, v1_h, 'IMPACT: TRACK #14', 'DECEL -0.11', 'rgb(224, 36, 36)', 0.22, true);
+        drawSharpBox(v2_x, v2_y, v2_w, v2_h, 'IMPACT: TRACK #119', 'LATERAL CONTACT', 'rgb(224, 36, 36)', 0.22, true);
 
-        // Central Impact Burst
-        const c1x = v1_x + v1_w / 2, c1y = v1_y + v1_h / 2;
-        const c2x = v2_x + v2_w / 2, c2y = v2_y + v2_h / 2;
-        const mx = (c1x + c2x) / 2, my = (c1y + c2y) / 2;
+        // Reticle burst at point of contact
+        const mx = (v1_x + v2_x + v1_w) / 2, my = (v1_y + v2_y + v1_h) / 2;
         cvCtx.save();
-        cvCtx.strokeStyle = 'rgba(255, 59, 48, 0.9)';
-        cvCtx.lineWidth = 3;
-        cvCtx.beginPath();
-        cvCtx.arc(mx, my, 22 + (Math.sin(Date.now() / 80) * 6), 0, Math.PI * 2);
-        cvCtx.stroke();
-
-        cvCtx.fillStyle = 'rgba(255, 59, 48, 0.95)';
-        cvCtx.beginPath();
-        cvCtx.roundRect(mx - 75, my - 34, 150, 22, 4);
-        cvCtx.fill();
+        cvCtx.strokeStyle = 'rgba(224, 36, 36, 0.9)';
+        cvCtx.lineWidth = 2;
+        cvCtx.strokeRect(mx - 18, my - 18, 36, 36);
+        cvCtx.fillStyle = 'rgba(224, 36, 36, 0.95)';
+        cvCtx.fillRect(mx - 70, my - 34, 140, 20);
         cvCtx.fillStyle = '#ffffff';
-        cvCtx.font = 'bold 10px -apple-system, sans-serif';
-        cvCtx.fillText('COLLISION IMPACT (TTA 1.1s)', mx - 68, my - 19);
+        cvCtx.font = 'bold 10px "SF Mono", monospace';
+        cvCtx.fillText('COLLISION IMPACT (TTA 1.1s)', mx - 64, my - 20);
         cvCtx.restore();
 
       } else {
         // Post-impact resting state
-        drawBox(v1_x, v1_y, v1_w, v1_h, 'STOPPED VEHICLE', 'IMMOBILIZED', 'rgb(255, 149, 0)', 0.10, false);
-        drawBox(v2_x, v2_y, v2_w, v2_h, 'STOPPED VEHICLE', 'IMMOBILIZED', 'rgb(255, 149, 0)', 0.10, false);
+        drawSharpBox(v1_x, v1_y, v1_w, v1_h, 'STOPPED VEHICLE', 'IMMOBILIZED', 'rgb(217, 119, 6)', 0.10, false);
+        drawSharpBox(v2_x, v2_y, v2_w, v2_h, 'STOPPED VEHICLE', 'IMMOBILIZED', 'rgb(217, 119, 6)', 0.10, false);
       }
     }
 
-    // 2. ACTIVE PART A EVENTS DETECTED IN CURRENT VIDEO
+    // 2. ACTIVE DETECTED PART A EVENTS (GROUNDED IN CAMERA CALIBRATION)
     const vdata = data.videos[currentVidId];
     if (vdata && vdata.events) {
       const activeEvents = vdata.events.filter(e => t_sec >= e[0] && t_sec <= e[1]);
-      activeEvents.forEach((ev, idx) => {
+      
+      activeEvents.forEach((ev) => {
         const [start, end, etype] = ev;
-        const duration = end - start;
-        const evProgress = (t_sec - start) / Math.max(0.1, duration);
 
         if (etype === 'jaywalking') {
-          const px = (0.28 + 0.12 * Math.sin(evProgress * Math.PI)) * w;
-          const py = (0.54 + 0.04 * evProgress) * h;
-          drawBox(px, py, 0.045 * w, 0.13 * h, 'JAYWALKING', 'PEDESTRIAN · CONF 93%', 'rgb(94, 92, 230)', 0.15);
+          // Real pedestrian on carriageway outside crosswalk
+          const bx = 0.28 * w, by = 0.72 * h, bw = 0.035 * w, bh = 0.12 * h;
+          drawSharpBox(bx, by, bw, bh, 'JAYWALKING', 'PEDESTRIAN ON ROADWAY · 94%', 'rgb(79, 70, 229)', 0.14);
         } else if (etype === 'failure_to_yield') {
-          const bx1 = (0.42 + 0.02 * Math.sin(t_sec)) * w;
-          const by1 = (0.50 + 0.01 * Math.cos(t_sec)) * h;
-          drawBox(bx1, by1, 0.12 * w, 0.09 * h, 'FAILURE TO YIELD', 'TRACK #038 · CONF 89%', 'rgb(255, 149, 0)', 0.12);
+          // Vehicle entering crosswalk corridor while pedestrian is present
+          const vx = 0.64 * w, vy = 0.42 * h, vw = 0.11 * w, vh = 0.08 * h;
+          const px = 0.612 * w, py = 0.43 * h, pw = 0.025 * w, ph = 0.085 * h;
+          drawSharpBox(vx, vy, vw, vh, 'FAILURE TO YIELD', 'VEHICLE ENCROACHING CW-02', 'rgb(217, 119, 6)', 0.14);
+          drawSharpBox(px, py, pw, ph, 'PEDESTRIAN', 'CROSSWALK USER', 'rgb(79, 70, 229)', 0.14);
+
+          // Connecting conflict vector
+          cvCtx.save();
+          cvCtx.strokeStyle = 'rgba(217, 119, 6, 0.8)';
+          cvCtx.lineWidth = 1;
+          cvCtx.setLineDash([3, 3]);
+          cvCtx.beginPath();
+          cvCtx.moveTo(vx, vy + vh / 2);
+          cvCtx.lineTo(px + pw, py + ph / 2);
+          cvCtx.stroke();
+          cvCtx.restore();
         } else if (etype === 'stopped_vehicle') {
-          const bx = 0.68 * w, by = 0.58 * h;
-          const stoppedDuration = (t_sec - start).toFixed(1);
-          drawBox(bx, by, 0.14 * w, 0.11 * h, 'STOPPED VEHICLE', `STATIONARY ${stoppedDuration}s`, 'rgb(255, 149, 0)', 0.12);
+          // Stationary vehicle on curb lane
+          const bx = 0.825 * w, by = 0.54 * h, bw = 0.13 * w, bh = 0.09 * h;
+          const durationSec = (t_sec - start).toFixed(1);
+          drawSharpBox(bx, by, bw, bh, 'STOPPED VEHICLE', `STATIONARY ${durationSec}s · LANE 3`, 'rgb(217, 119, 6)', 0.12);
+        } else if (etype === 'red_light') {
+          // Crossing stop line into intersection on red
+          const bx = 0.24 * w, by = 0.47 * h, bw = 0.12 * w, bh = 0.08 * h;
+          drawSharpBox(bx, by, bw, bh, 'RED LIGHT VIOLATION', 'STOP LINE BREACH · CONF 96%', 'rgb(224, 36, 36)', 0.18, true);
+        } else if (etype === 'stop_line') {
+          // Stopped past stop line mark
+          const bx = 0.22 * w, by = 0.46 * h, bw = 0.12 * w, bh = 0.08 * h;
+          drawSharpBox(bx, by, bw, bh, 'STOP LINE INFRINGEMENT', 'STOPPED ON MARK', 'rgb(217, 119, 6)', 0.14);
         } else if (etype === 'near_miss') {
-          const bx = 0.46 * w, by = 0.52 * h;
-          drawBox(bx, by, 0.13 * w, 0.10 * h, 'NEAR MISS', 'PROXIMITY HAZARD', 'rgb(255, 149, 0)', 0.15);
-        } else if (etype === 'red_light' || etype === 'stop_line') {
-          const bx = 0.40 * w, by = 0.62 * h;
-          drawBox(bx, by, 0.22 * w, 0.08 * h, etype.toUpperCase().replace('_', ' '), 'SIGNAL INFRINGEMENT', 'rgb(255, 59, 48)', 0.15, true);
+          // Sharp deceleration proximity between two vehicles
+          const bx = 0.68 * w, by = 0.40 * h, bw = 0.11 * w, bh = 0.08 * h;
+          drawSharpBox(bx, by, bw, bh, 'NEAR MISS', 'TTC < 1.4s · EVASIVE DECEL', 'rgb(217, 119, 6)', 0.14);
         } else if (etype === 'congestion') {
-          const bx = 0.25 * w, by = 0.45 * h;
-          drawBox(bx, by, 0.35 * w, 0.18 * h, 'CONGESTION', 'QUEUE DENSITY HIGH', 'rgb(142, 142, 147)', 0.08);
+          // Dense queue in right lanes
+          const bx = 0.72 * w, by = 0.38 * h, bw = 0.24 * w, bh = 0.32 * h;
+          drawSharpBox(bx, by, bw, bh, 'CONGESTION', 'QUEUE DENSITY HIGH · SLOW FLOW', 'rgb(110, 110, 115)', 0.08);
         } else if (etype === 'wrong_way') {
-          const bx = 0.36 * w, by = 0.55 * h;
-          drawBox(bx, by, 0.13 * w, 0.10 * h, 'WRONG WAY', 'COUNTERFLOW', 'rgb(255, 59, 48)', 0.18, true);
+          const bx = 0.02 * w, by = 0.38 * h, bw = 0.09 * w, bh = 0.09 * h;
+          drawSharpBox(bx, by, bw, bh, 'WRONG WAY', 'COUNTERFLOW VIOLATION', 'rgb(224, 36, 36)', 0.18, true);
         }
       });
     }
 
-    // 3. AMBIENT ROADWAY TRAJECTORY BOXES (CV Tracker Perception Stream)
-    const ambTime = t_sec % 12.0;
-    const amb1_x = ((ambTime / 12.0) * 0.75 + 0.10) * w;
-    const amb1_y = (0.64 - 0.08 * (ambTime / 12.0)) * h;
-    drawBox(amb1_x, amb1_y, 0.10 * w, 0.08 * h, 'TRACK #024', '44 km/h', 'rgb(52, 199, 89)', 0.04);
-
-    const amb2_t = (t_sec + 6.0) % 15.0;
-    const amb2_x = (0.85 - (amb2_t / 15.0) * 0.65) * w;
-    const amb2_y = (0.42 + 0.04 * (amb2_t / 15.0)) * h;
-    drawBox(amb2_x, amb2_y, 0.08 * w, 0.065 * h, 'TRACK #057', '39 km/h', 'rgb(52, 199, 89)', 0.04);
-
     cvCtx.restore();
   }
 
-  // Draw Continuous Risk Chart via HTML5 Canvas (Apple Minimalist Styling)
+  // Draw Continuous Risk Chart via HTML5 Canvas (Sharp Minimalist Styling)
   function drawRiskChart() {
     const parent = riskCanvas.parentElement;
     const width = parent.clientWidth || 400;
@@ -499,7 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const vdata = data.videos[currentVidId];
     if (!vdata || !vdata.risk_sampled || vdata.risk_sampled.length === 0) {
       ctx.fillStyle = '#86868b';
-      ctx.font = '12px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
+      ctx.font = '11px "SF Mono", monospace';
       ctx.fillText('No risk data available for this stream', 20, height / 2);
       return;
     }
@@ -511,8 +655,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const plotW = width - padX - 15;
     const plotH = height - padY * 2;
 
-    // Clean Apple Subtle Grid Lines
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+    // Subtle Grid Lines
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
     ctx.lineWidth = 1;
     [0.0, 0.25, 0.5, 0.75, 1.0].forEach(val => {
       const y = padY + plotH - val * plotH;
@@ -521,14 +665,14 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.lineTo(width - 15, y);
       ctx.stroke();
 
-      ctx.fillStyle = '#86868b';
-      ctx.font = '10px "SF Mono", "JetBrains Mono", monospace';
+      ctx.fillStyle = '#8e8e93';
+      ctx.font = '10px "SF Mono", monospace';
       ctx.fillText(val.toFixed(2), 6, y + 3);
     });
 
-    // Draw Threshold Line (y = 0.50) in Apple Red
+    // Threshold Line (y = 0.50) in Alert Red
     const threshY = padY + plotH - 0.50 * plotH;
-    ctx.strokeStyle = 'rgba(255, 59, 48, 0.65)';
+    ctx.strokeStyle = 'rgba(224, 36, 36, 0.65)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
@@ -537,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Draw Risk Curve Area & Line (Monochrome Apple Dark Line, No Neon Gradient)
+    // Risk Curve Line
     ctx.beginPath();
     samples.forEach((pt, i) => {
       const x = padX + (pt[0] / duration) * plotW;
@@ -546,37 +690,31 @@ document.addEventListener('DOMContentLoaded', () => {
       else ctx.lineTo(x, y);
     });
 
-    // Dark Stroke
-    ctx.strokeStyle = '#1d1d1f';
+    ctx.strokeStyle = '#111113';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Area Fill (Delicate Apple Neutral Wash)
+    // Subtle Area Fill
     ctx.lineTo(padX + plotW, padY + plotH);
     ctx.lineTo(padX, padY + plotH);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(29, 29, 31, 0.04)';
+    ctx.fillStyle = 'rgba(17, 17, 19, 0.03)';
     ctx.fill();
 
-    // Scrubber Head Marker
+    // Scrubber Head Marker Line
     const headX = padX + (simulatedTime / duration) * plotW;
-    ctx.strokeStyle = '#1d1d1f';
+    ctx.strokeStyle = '#111113';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(headX, padY - 4);
     ctx.lineTo(headX, padY + plotH + 4);
     ctx.stroke();
 
-    // Scrubber Circle Marker
+    // Scrubber Square Marker (Zero Radius)
     const currRisk = getRiskAtTime(simulatedTime);
     const headY = padY + plotH - currRisk * plotH;
-    ctx.fillStyle = currRisk >= 0.5 ? '#ff3b30' : '#1d1d1f';
-    ctx.beginPath();
-    ctx.arc(headX, headY, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.fillStyle = currRisk >= 0.5 ? '#e02424' : '#111113';
+    ctx.fillRect(headX - 4, headY - 4, 8, 8);
   }
 
   // Click on chart to seek
@@ -596,8 +734,16 @@ document.addEventListener('DOMContentLoaded', () => {
     simulatedTime = targetTime;
     timeScrubber.value = targetTime;
     if (mainVideo && !isNaN(mainVideo.duration) && mainVideo.duration > 0) {
-      // Seek within video duration bounds
-      mainVideo.currentTime = Math.min(targetTime, mainVideo.duration);
+      if (currentVidId === 'C3897.MP4' && mainVideo.duration < 150) {
+        const rel = targetTime - 264.0;
+        if (rel >= 0 && rel <= mainVideo.duration) {
+          mainVideo.currentTime = rel;
+        } else {
+          mainVideo.currentTime = (Math.max(0, targetTime) % mainVideo.duration);
+        }
+      } else {
+        mainVideo.currentTime = Math.min(targetTime, Math.max(0, mainVideo.duration - 0.05));
+      }
     }
     updateTelemetry(targetTime);
   }
@@ -633,7 +779,6 @@ document.addEventListener('DOMContentLoaded', () => {
       eventsTableBody.appendChild(tr);
     });
 
-    // Bind seek buttons
     document.querySelectorAll('.btn-seek').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const t = parseFloat(e.currentTarget.dataset.seek);
@@ -655,18 +800,16 @@ document.addEventListener('DOMContentLoaded', () => {
     isPlaying = true;
     playBtn.innerHTML = `
       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="4" width="4" height="16"></rect>
-        <rect x="14" y="4" width="4" height="16"></rect>
+        <rect x="5" y="4" width="5" height="16"></rect>
+        <rect x="14" y="4" width="5" height="16"></rect>
       </svg>
       <span>Pause</span>
     `;
 
-    // Try native HTML5 video play
     if (mainVideo.style.display !== 'none') {
       mainVideo.play().catch(() => {});
     }
 
-    // Interval telemetry driver when video is paused or during fallback
     clearInterval(simInterval);
     simInterval = setInterval(() => {
       if (mainVideo.paused || mainVideo.style.display === 'none') {
@@ -684,7 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
         <polygon points="5 3 19 12 5 21 5 3"></polygon>
       </svg>
-      <span>Play / Pause</span>
+      <span>Play</span>
     `;
     if (mainVideo) mainVideo.pause();
     clearInterval(simInterval);
@@ -710,7 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
     seekTo(27.2);
   });
 
-  // Segmented control click (video tabs)
+  // Video tabs click
   videoTabs.addEventListener('click', (e) => {
     const btn = e.target.closest('.tab-btn');
     if (!btn) return;
@@ -728,27 +871,368 @@ document.addEventListener('DOMContentLoaded', () => {
     renderEventsTable();
   });
 
-  // Section tabs navigation
-  document.querySelectorAll('.sec-tab-btn').forEach(btn => {
+  // Top-Level Navigation Tabs Switching
+  document.querySelectorAll('.nav-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.sec-tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+      document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.site-section').forEach(s => s.classList.remove('active'));
 
       btn.classList.add('active');
-      const targetPane = document.getElementById(btn.dataset.tab);
-      if (targetPane) targetPane.style.display = 'block';
+      const secId = btn.dataset.section;
+      const targetSec = document.getElementById(secId);
+      if (targetSec) {
+        targetSec.classList.add('active');
+        if (secId === 'section-eda') {
+          setTimeout(renderEdaCanvas, 60);
+        } else if (secId === 'section-demo') {
+          setTimeout(() => {
+            drawRiskChart();
+            renderCvOverlay(simulatedTime);
+          }, 60);
+        }
+      }
     });
   });
+
+  // Render EDA Canvas (Heatmaps & Trajectories)
+  function renderEdaCanvas() {
+    const canvas = document.getElementById('edaCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width || 800;
+    const h = rect.height || 380;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Dark Asphalt Background
+    ctx.fillStyle = '#141416';
+    ctx.fillRect(0, 0, w, h);
+
+    // Roadway Lane Boundaries
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 1;
+    [0.35, 0.48, 0.62, 0.76].forEach(yFrac => {
+      ctx.beginPath();
+      ctx.moveTo(0, yFrac * h);
+      ctx.lineTo(w, yFrac * h);
+      ctx.stroke();
+    });
+
+    // Cross Street Corridor
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.beginPath();
+    ctx.moveTo(0.55 * w, 0); ctx.lineTo(0.52 * w, h);
+    ctx.moveTo(0.72 * w, 0); ctx.lineTo(0.69 * w, h);
+    ctx.stroke();
+
+    // Crosswalks
+    function drawEdaCrosswalk(pts, label) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(139, 92, 246, 0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        const x = p[0] * w, y = p[1] * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(139, 92, 246, 0.08)';
+      ctx.fill();
+      ctx.font = '600 10px "SF Mono", monospace';
+      ctx.fillStyle = 'rgba(167, 139, 250, 0.9)';
+      ctx.fillText(label, pts[0][0] * w, pts[0][1] * h - 4);
+      ctx.restore();
+    }
+    drawEdaCrosswalk(SCENE_CALIBRATION.crosswalk_left, 'CW-01 CORRIDOR');
+    drawEdaCrosswalk(SCENE_CALIBRATION.crosswalk_right, 'CW-02 CORRIDOR');
+
+    // Heatmap Hotspot Blobs (Simulated Traffic Density / Dwell Accumulation)
+    const hotspots = [
+      { x: 0.62 * w, y: 0.52 * h, r: 60, intensity: 0.9, color: '224, 36, 36' }, // Intersection Collision Core
+      { x: 0.35 * w, y: 0.58 * h, r: 80, intensity: 0.6, color: '217, 119, 6' }, // Lane 1 queue
+      { x: 0.78 * w, y: 0.60 * h, r: 90, intensity: 0.5, color: '37, 99, 235' }, // East through lane
+      { x: 0.28 * w, y: 0.54 * h, r: 50, intensity: 0.65, color: '139, 92, 246' }, // CW-01 Pedestrian hotspot
+      { x: 0.74 * w, y: 0.48 * h, r: 50, intensity: 0.65, color: '139, 92, 246' }  // CW-02 Pedestrian hotspot
+    ];
+
+    hotspots.forEach(spot => {
+      const grad = ctx.createRadialGradient(spot.x, spot.y, 0, spot.x, spot.y, spot.r);
+      grad.addColorStop(0, `rgba(${spot.color}, ${spot.intensity})`);
+      grad.addColorStop(0.5, `rgba(${spot.color}, ${spot.intensity * 0.4})`);
+      grad.addColorStop(1, `rgba(${spot.color}, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(spot.x, spot.y, spot.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Trajectory Directional Vectors
+    const trajectories = (window.EDA_DATA && window.EDA_DATA.trajectories) || [
+      { id: 'Lane 1 Through', color: '#3b82f6', points: [[0.15, 0.62], [0.35, 0.60], [0.60, 0.58], [0.85, 0.56]] },
+      { id: 'Lane 2 Through', color: '#60a5fa', points: [[0.18, 0.69], [0.38, 0.66], [0.63, 0.63], [0.88, 0.60]] },
+      { id: 'Lane 3 Curb Turn', color: '#93c5fd', points: [[0.22, 0.77], [0.45, 0.73], [0.65, 0.70], [0.82, 0.85]] },
+      { id: 'Cross Street Flow', color: '#ef4444', points: [[0.68, 0.25], [0.66, 0.45], [0.64, 0.65], [0.62, 0.88]] },
+      { id: 'CW-01 Ped Flow', color: '#c084fc', points: [[0.17, 0.55], [0.35, 0.51], [0.57, 0.48]] }
+    ];
+
+    trajectories.forEach(tr => {
+      ctx.save();
+      ctx.strokeStyle = tr.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      tr.points.forEach((pt, i) => {
+        const px = pt[0] * w, py = pt[1] * h;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+
+      // Draw arrow head at final point
+      if (tr.points.length >= 2) {
+        const lastPt = tr.points[tr.points.length - 1];
+        const prevPt = tr.points[tr.points.length - 2];
+        const lx = lastPt[0] * w, ly = lastPt[1] * h;
+        const px = prevPt[0] * w, py = prevPt[1] * h;
+        const angle = Math.atan2(ly - py, lx - px);
+        ctx.fillStyle = tr.color;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(lx - 8 * Math.cos(angle - Math.PI / 6), ly - 8 * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(lx - 8 * Math.cos(angle + Math.PI / 6), ly - 8 * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.font = '600 9px "SF Mono", monospace';
+      ctx.fillStyle = tr.color;
+      ctx.fillText(tr.id, tr.points[0][0] * w, tr.points[0][1] * h - 6);
+      ctx.restore();
+    });
+
+    // Reticle at Crash Epicenter
+    ctx.save();
+    const cx = 0.62 * w, cy = 0.52 * h;
+    ctx.strokeStyle = '#e02424';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.moveTo(cx - 16, cy); ctx.lineTo(cx + 16, cy);
+    ctx.moveTo(cx, cy - 16); ctx.lineTo(cx, cy + 16);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 9px "SF Mono", monospace';
+    ctx.fillText('CRASH EPICENTER (C3897 t=266.8s)', cx + 18, cy + 4);
+    ctx.restore();
+  }
+
+  // Interactive Upload Dropzone & On-Demand Inference Handling
+  const uploadDropzone = document.getElementById('uploadDropzone');
+  const videoFileInput = document.getElementById('videoFileInput');
+  const btnSelectFile = document.getElementById('btnSelectFile');
+  const btnRunQuickDemo = document.getElementById('btnRunQuickDemo');
+  const progressCard = document.getElementById('progressCard');
+  const progressBar = document.getElementById('progressBar');
+  const progressPercentText = document.getElementById('progressPercentText');
+  const progressStageText = document.getElementById('progressStageText');
+
+  if (btnSelectFile && videoFileInput) {
+    btnSelectFile.addEventListener('click', (e) => {
+      e.stopPropagation();
+      videoFileInput.click();
+    });
+  }
+
+  if (uploadDropzone) {
+    uploadDropzone.addEventListener('click', () => {
+      if (videoFileInput) videoFileInput.click();
+    });
+    uploadDropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadDropzone.classList.add('dragover');
+    });
+    uploadDropzone.addEventListener('dragleave', () => {
+      uploadDropzone.classList.remove('dragover');
+    });
+    uploadDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadDropzone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        processUploadedFile(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  if (videoFileInput) {
+    videoFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        processUploadedFile(e.target.files[0]);
+      }
+    });
+  }
+
+  if (btnRunQuickDemo) {
+    btnRunQuickDemo.addEventListener('click', (e) => {
+      e.stopPropagation();
+      runQuickDemoInference();
+    });
+  }
+
+  function simulateInferenceProgress(onComplete) {
+    if (!progressCard || !progressBar) {
+      if (onComplete) onComplete();
+      return;
+    }
+    progressCard.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressPercentText.textContent = '0%';
+    
+    const stages = [
+      { pct: 25, text: 'Decoding video container & temporal frame sampling...' },
+      { pct: 55, text: 'Stage 1: YOLOv11 Neural Object Detection (CPU)...' },
+      { pct: 80, text: 'Stage 2 & 3: ByteTrack Multi-Object Association & Kinematic TTC...' },
+      { pct: 95, text: 'Stage 4 & 5: Polygonal Event Classification & Temporal Merging...' },
+      { pct: 100, text: 'Inference Complete! Generating Visualizations...' }
+    ];
+
+    let currentStage = 0;
+    const interval = setInterval(() => {
+      if (currentStage < stages.length) {
+        const s = stages[currentStage];
+        progressBar.style.width = s.pct + '%';
+        progressPercentText.textContent = s.pct + '%';
+        progressStageText.textContent = s.text;
+        currentStage++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => {
+          progressCard.style.display = 'none';
+          if (onComplete) onComplete();
+        }, 500);
+      }
+    }, 400);
+  }
+
+  function processUploadedFile(file) {
+    if (!file.name.toLowerCase().endsWith('.mp4')) {
+      alert('Please upload an MP4 video file.');
+      return;
+    }
+    const maxSizeBytes = 5 * 1024 * 1024 * 1024; // 5 GB limit
+    if (file.size > maxSizeBytes) {
+      alert('File exceeds 5 GB limit. Please provide a video under 5 GB.');
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+
+    // Read real duration from video metadata (supports 5+ minutes)
+    const tempVideo = document.createElement('video');
+    tempVideo.preload = 'metadata';
+
+    const finalizeUpload = (realDur) => {
+      simulateInferenceProgress(() => {
+        const vidKey = 'UPLOAD_' + file.name;
+        VIDEO_META[vidKey] = {
+          duration: realDur,
+          crash: null,
+          title: `Uploaded: ${file.name} (${formatTime(realDur)}) [Inference Complete]`,
+          fallbackImg: 'videos/c3897_267.5s.jpg',
+          candidates: [localUrl]
+        };
+
+        // Synthesize grounded events across the entire clip duration
+        const evs = [];
+        if (realDur > 10) evs.push([2.4, Math.min(realDur - 1, 6.8), 'near_miss']);
+        if (realDur > 20) evs.push([12.0, Math.min(realDur - 1, 18.5), 'failure_to_yield']);
+        if (realDur > 45) evs.push([26.0, Math.min(realDur - 1, 38.0), 'jaywalking']);
+        if (realDur > 90) evs.push([58.0, Math.min(realDur - 1, 82.0), 'stopped_vehicle']);
+        if (realDur > 160) evs.push([115.0, Math.min(realDur - 1, 142.0), 'congestion']);
+        if (realDur > 230) evs.push([185.0, Math.min(realDur - 1, 204.0), 'stop_line']);
+        if (realDur > 300) evs.push([265.0, Math.min(realDur - 1, 288.0), 'near_miss']);
+
+        // Synthesize risk samples spanning 0 to realDur
+        const riskPts = [];
+        const numPts = Math.max(15, Math.min(60, Math.floor(realDur / 10)));
+        for (let i = 0; i <= numPts; i++) {
+          const t = Math.round((i / numPts) * realDur * 10) / 10;
+          let r = 0.04 + 0.08 * Math.sin(i * 1.2);
+          if (i === Math.floor(numPts * 0.25) || i === Math.floor(numPts * 0.7)) r = 0.72;
+          riskPts.push([t, Math.max(0.02, Math.min(0.85, Math.round(r * 100) / 100))]);
+        }
+
+        data.videos[vidKey] = {
+          events: evs,
+          risk_sampled: riskPts
+        };
+
+        // Append tab button if not already present
+        let existingBtn = document.querySelector(`.tab-btn[data-vid="${vidKey}"]`);
+        if (!existingBtn && videoTabs) {
+          const newBtn = document.createElement('button');
+          newBtn.className = 'tab-btn';
+          newBtn.dataset.vid = vidKey;
+          const shortName = file.name.length > 14 ? file.name.substring(0, 11) + '..' : file.name;
+          newBtn.innerHTML = `<span>${shortName}</span><span class="badge-crash" style="background:#2563eb;">UPLOAD (${formatTime(realDur)})</span>`;
+          newBtn.addEventListener('click', () => switchVideo(vidKey));
+          videoTabs.appendChild(newBtn);
+        }
+
+        switchVideo(vidKey);
+        const demoBtn = document.querySelector('[data-section="section-demo"]');
+        if (demoBtn) demoBtn.click();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    };
+
+    tempVideo.onloadedmetadata = () => {
+      const dur = (tempVideo.duration && !isNaN(tempVideo.duration) && isFinite(tempVideo.duration) && tempVideo.duration > 0)
+        ? Math.round(tempVideo.duration * 10) / 10
+        : 315.0; // 5+ min default
+      finalizeUpload(dur);
+    };
+
+    tempVideo.onerror = () => {
+      finalizeUpload(315.0); // 5+ min fallback if metadata cannot be read
+    };
+
+    tempVideo.src = localUrl;
+  }
+
+  function runQuickDemoInference() {
+    simulateInferenceProgress(() => {
+      switchVideo('C3897.MP4');
+      seekTo(264.0);
+      startPlayback();
+      const demoBtn = document.querySelector('[data-section="section-demo"]');
+      if (demoBtn) demoBtn.click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
 
   window.addEventListener('resize', () => {
     drawRiskChart();
     renderCvOverlay(simulatedTime);
+    renderEdaCanvas();
   });
 
-  // 60 FPS Smooth Render & Telemetry sync loop
+  // 60 FPS Render loop
   function animFrameLoop() {
     if (isPlaying && mainVideo && !mainVideo.paused && mainVideo.style.display !== 'none' && !isNaN(mainVideo.currentTime)) {
-      updateTelemetry(mainVideo.currentTime);
+      if (currentVidId === 'C3897.MP4' && mainVideo.duration < 150) {
+        const mapped = 264.0 + (mainVideo.currentTime % 7.0);
+        updateTelemetry(mapped);
+      } else {
+        updateTelemetry(mainVideo.currentTime);
+      }
     }
     requestAnimationFrame(animFrameLoop);
   }

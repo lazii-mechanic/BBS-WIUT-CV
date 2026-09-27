@@ -3,22 +3,48 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.dll
-*.avi
+*.so
+*.dylib
 
 # Virtual environments
 venv/
 env/
 .env
+.venv/
+ENV/
 
-# Large video files (20GB sample videos must not be pushed to GitHub)
+# Large video files (do not push video clips / raw recordings to Git)
 videos/
+web/videos/
+web/uploads/
 *.mp4
 *.MP4
+*.avi
+*.mkv
+*.mov
 
-# OS and IDE files
+# Operating System and IDE files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
 
-# Duplicate weights in root (weights/yolo11n.pt is kept)
+# Antigravity agent & scratch files
+.agents/
+scratch/
+
+# Local build / intermediate artifacts
+openh264*.dll
 /yolo11n.pt
+
+# Output predictions generated during testing (preserve predictions_samples.json and examples/)
+predictions.json
+!predictions_samples.json
+!examples/predictions.json
