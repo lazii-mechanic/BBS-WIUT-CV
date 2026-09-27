@@ -69,6 +69,20 @@ bash weights/download.sh
 # weights\download.bat
 ```
 
+### Docker (One-Command Deployment & Evaluation)
+A production-ready `Dockerfile` and `entrypoint.sh` are provided at the root:
+
+```bash
+# 1. Build the container image
+docker build -t team .
+
+# 2. Launch the web dashboard & live demo (accessible at http://localhost:8080)
+docker run -p 8080:8080 team
+
+# 3. Run the official offline evaluation inside Docker (as described in the hackathon rules):
+docker run --rm -v /data/test:/data/test team python run_submission.py --videos /data/test --out predictions.json
+```
+
 ### Running the Official Harness
 To run the solution over an unlabeled directory of `.mp4` test videos and produce `predictions.json`:
 
