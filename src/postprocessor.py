@@ -63,23 +63,26 @@ def merge_raw_frames(frame_events: list[tuple[float, str]],
             segments.append([seg_start, min(seg_end, duration)])
 
         # Ensure no overlaps among segments of the same class
-        # (merge any that overlap or touch)
+        # Round first to avoid floating point precision artifacts, then merge
         merged: list[list[float]] = []
         for s, e in segments:
-            if not merged:
-                merged.append([s, e])
-            else:
-                last_s, last_e = merged[-1]
-                if s <= last_e:
-                    merged[-1][1] = max(last_e, e)
-                else:
-                    merged.append([s, e])
-
-        for s, e in merged:
             s_round = round(max(0.0, float(s)), 2)
             e_round = round(min(duration, float(e)), 2)
-            if e_round > s_round + 0.1:
-                all_events.append([s_round, e_round, label])
+            if e_round <= s_round + 0.10:
+                continue
+
+            if not merged:
+                merged.append([s_round, e_round])
+            else:
+                last_s, last_e = merged[-1]
+                if s_round <= last_e:
+                    merged[-1][1] = max(last_e, e_round)
+                else:
+                    merged.append([s_round, e_round])
+
+        for s, e in merged:
+            if e > s + 0.10:
+                all_events.append([s, e, label])
 
     # Sort all events chronologically
     all_events.sort(key=lambda x: (x[0], x[1], x[2]))

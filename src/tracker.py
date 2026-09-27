@@ -74,6 +74,23 @@ class TrackState:
         return max_s
 
     @property
+    def windowed_acceleration(self) -> float:
+        """Robust multi-frame acceleration over sliding window (cuts 1-frame jitter)."""
+        if len(self.history) < 5:
+            return self.acceleration
+        pts = list(self.history)
+        t_curr, c_curr, _ = pts[-1]
+        t_mid, c_mid, _ = pts[-3]
+        t_old, c_old, _ = pts[-5]
+        dt1 = t_curr - t_mid
+        dt2 = t_mid - t_old
+        if dt1 > 1e-3 and dt2 > 1e-3:
+            s_curr = float(np.linalg.norm(c_curr - c_mid)) / dt1
+            s_prev = float(np.linalg.norm(c_mid - c_old)) / dt2
+            return (s_curr - s_prev) / (0.5 * (dt1 + dt2))
+        return self.acceleration
+
+    @property
     def stationary_duration(self) -> float:
         return self.last_seen_t - self.stationary_start_t
 
